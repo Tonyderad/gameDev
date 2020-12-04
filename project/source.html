@@ -1,0 +1,358 @@
+<html>
+<head>
+<title>Game testing</title>
+<meta name="viewpoint" content="width=device-width, intial-scale=1.0"/>
+<link href="style.css" type="text/css" rel="stylesheet" />
+<script src="enemies.js"></script>
+</head>
+<body> <!-- onload="gameStart" -->
+  <canvas id="canvas" width="1080" height="900"></canvas>
+    <script>
+	var game = document.getElementById("canvas");
+	var ctx = game.getContext("2d");
+	var background = new Image();
+	background.src = "space.jpg";
+	var playerModel = new Image();
+	playerModel.src = "ship3.png";
+	var barrel = new Image();
+	barrel.src = "barrel4.png";
+	var beam = new Image();
+	beam.src = "beam2.png";
+	var ship = {
+		x: game.width/2,
+		y: game.height/2,
+		img: playerModel
+	}
+	var shotInterval = 7.0;
+	var shipX = 524;
+	var shipY = 434;
+	var shipL = 0;
+	var shipR = 0;
+	var shipU = 0;
+	var shipD = 0;
+	var shipRot = 0;
+	var gunRot = 0;
+	var shipRotL = false;
+	var shipRotR = false;
+	var temp = 3;
+	var frictionCoef = .88;
+	var shipLs = 0;
+	var shipUs = 0;
+	var shipRs = 0;
+	var shipDs = 0;
+	var keys = [];
+	
+	var shots = [];
+	
+	var ctrl = 0;
+	
+	setInterval(update, 20);
+	//setInterval(enemySpawn, 5000);
+	document.body.addEventListener("keydown", function (e) {
+		keys[e.keyCode] = true;
+	});
+		document.body.addEventListener("keyup", function (e) {
+		keys[e.keyCode] = false;
+	});
+	
+	function switchControls() {
+		switch(ctrl){
+			case 0:
+				ctrl = 1;
+				console.log("ctrl: " + ctrl);
+				break;
+			case 1:
+				ctrl = 0;
+				console.log("ctrl: " + ctrl);
+				break;
+			default:
+				console.log("setting controlScheme error");
+				break;
+		}
+	}
+	
+	function update(){
+	document.getElementById("canvas").style.width = window.innerWidth-16;
+	document.getElementById("canvas").style.height = (window.innerWidth/1.2)-16;
+		//background
+		ctx.clearRect(0, 0, 1080, 900);
+		document.getElementById("canvas").style.background = "url('space.png')";
+		//player ship
+		frame();
+		//rot();
+	}
+	
+	function enemySpawn(){
+		testEnemy();
+	}
+
+	function frame(){
+		ctx.clearRect(0, 0, game.width, game.height);
+		//pressing d doesn't allow for downleft arrow to work and downleft arrow doesnt allow d to be pressed, unsure why
+		switch(ctrl){
+			case 0:
+				controls = {
+				up: keys[87],
+				down: keys[83],
+				left: keys[65],
+				right: keys[68],
+				shootUp: keys[38],
+				shootDown: keys[40],
+				shootLeft: keys[37],
+				shootRight: keys[39],
+				};
+				break;
+			case 1:
+				controls = {
+				up: keys[38],
+				down: keys[40],
+				left: keys[37],
+				right: keys[39],
+				shootUp: keys[87],
+				shootDown: keys[83],
+				shootLeft: keys[65],
+				shootRight: keys[68],
+				};
+				break;
+			default:
+				break;
+		}
+		playerMove();
+		gunMove();
+		
+		ctx.translate(shipX+16, shipY+16);
+		ctx.rotate(shipRot*Math.PI/180);
+		ctx.translate(-(shipX+16), -(shipY+16));
+		ctx.drawImage(playerModel, shipX, shipY, 32, 32);
+		ctx.setTransform(1,0,0,1,0,0);
+		
+		ctx.translate(shipX+16, shipY+16);
+		ctx.rotate(gunRot*Math.PI/180);
+		ctx.translate(-(shipX+16), -(shipY+16));
+		ctx.drawImage(barrel, shipX, shipY, 32, 32);
+		shotInterval -= .5;
+		if((controls.shootUp || controls.shootDown || controls.shootLeft || controls.shootRight) && shotInterval < 1) {
+			var shot = {
+				xPos: shipX,
+				yPos: shipY,
+				rot: gunRot
+			};
+			shots.push(shot);
+			shotInterval = 4.5;
+		};
+		ctx.setTransform(1,0,0,1,0,0);
+		
+		for(var i = 0; i < shots.length; i++){
+			if(shots[i].xPos > 1080 || shots[i].yPos > 900 || shots[i].xPos < 0 || shots[i].yPos < 0) {
+			shots.splice(i, 1);
+			}else{
+				playerShot(shots[i]);
+			}
+		}
+		for(var i = 0; i < enemyList.length; i++){
+			if(enemyList[i].xPos > 1080 || enemyList[i].yPos > 900 || enemyList[i].xPos < 0 || enemyList[i].yPos < 0) {
+			enemyList.splice(i, 1);
+			}else{
+				testAI(enemyList[i]);
+			}
+		}
+		//ctx.drawImage(playerModel, shipX, shipY, 32, 32);
+		
+		friction();
+		
+		if(shipX > 1064){
+			shipX = 1064;
+		}else if(shipX < -16){
+			shipX = -16;
+		}
+		
+		if(shipY > 895){
+			shipY = 895;
+		}else if(shipY < -16){
+			shipY = -16;
+		}
+	}
+	
+	function playerMove(){
+		tempRot = shipRot;
+		shipRot = 0;
+		var key = 1;
+		if(controls.left){shipL = 7; shipRot = (shipRot-90)/key; key++;}
+		if(controls.right){shipR = 7; shipRot = (shipRot+90)/key; key++;}
+		if(controls.up){shipU = 7; shipRot = (shipRot+0)/key; key++;}
+		if(controls.down){shipD = 7; if(controls.left){shipRot = (shipRot+540)/key; key++;}else{shipRot = (shipRot+180)/key; key++;}}
+		if(key == 1) shipRot = tempRot;
+	}
+	
+	function gunMove() {
+		tempRot = gunRot;
+		gunRot = 0;
+		var key = 1;
+		if(controls.shootLeft){gunRot = (gunRot-90)/key; key++;}
+		if(controls.shootRight){gunRot = (gunRot+90)/key; key++;}
+		if(controls.shootUp){gunRot = (gunRot+0)/key; key++;}
+		if(controls.shootDown){if(controls.shootLeft){gunRot = (gunRot+540)/key; key++;}else{gunRot = (gunRot+180)/key; key++;}}
+		if(key == 1) gunRot = tempRot;
+	}
+	
+	function playerShot(shot){
+		console.log("shoot");
+		ctx.translate(shot.xPos+16, shot.yPos+16);
+		ctx.rotate(shot.rot*Math.PI/180);
+		ctx.translate(-(shot.xPos+16), -(shot.yPos+16));
+		ctx.drawImage(beam, shot.xPos, shot.yPos, 32, 32);
+		ctx.setTransform(1,0,0,1,0,0);
+		
+		switch(shot.rot){
+			case 0:
+				shot.yPos -= 10;
+				break;
+			case -90:
+				shot.xPos -= 10;
+				break;
+			case 90:
+				shot.xPos += 10;
+				break;
+			case 180:
+				shot.yPos += 10;
+				break;
+			case -45:
+				shot.yPos -= 7;
+				shot.xPos -= 7;
+				break;
+			case 45:
+				shot.yPos -= 7;
+				shot.xPos += 7;
+				break;
+			case 135:
+				shot.yPos += 7;
+				shot.xPos += 7;
+				break;
+			case 225:
+				shot.yPos += 7;
+				shot.xPos -= 7;
+				break;
+			default:
+				break;
+		}
+	}
+	
+	function friction(){
+		shipL *= frictionCoef;
+		shipR *= frictionCoef;
+		shipU *= frictionCoef;
+		shipD *= frictionCoef;
+		shipX = shipX+shipR-shipL;
+        shipY = shipY+shipD-shipU;
+	}
+	/*
+	function rot(){
+                ctx.save();
+		//ctx.clearRect(0, 0, game.width, game.height);
+                //ctx.translate(game.width/2, game.height/2);
+                //ctx.rotate(shipRot*Math.PI/180);
+                //ctx.translate(-(game.width/2), -(game.height/2));
+                shipX = shipX+shipR-shipL;
+                shipY = shipY+shipD-shipU;
+                //ctx.drawImage(barrel, shipX, shipY, 32, 32);
+                ctx.restore();
+	}
+	*/
+
+	document.addEventListener("keydown", keyDown);
+	document.addEventListener("keyup", keyUp);
+	
+	function keyDown(/** @type {keyboardEvent}*/ ev){
+		switch(ev.keyCode){
+			case 37://left
+				//shipL = 7;
+				break;
+            case 38://up
+				//shipU = 7;
+				break;
+            case 39://right
+				//shipR = 7;
+				break;
+            case 40://down
+				//shipD = 7;
+				break;
+			case 65://a
+				//shipRotL = true;
+			break;//d
+			case 68:
+				//shipRotR = true;
+			break;
+		}
+	}
+
+	function keyUp(/** @type {keyboardEvent}*/ ev){
+                switch(ev.keyCode){
+                        case 37://left
+
+						shipLs = 1;
+                        break;
+                        case 38://up
+
+						shipUs = 1;
+                        break;
+                        case 39://right
+
+						shipRs = 1;
+                        break;
+                        case 40://down
+
+                        break;
+                	case 65://a
+                                //shipRotL = false;
+                        break;//d
+                        case 68:
+                                //shipRotR = false;
+                        break;
+		}
+        }
+
+	
+	/*
+	var temp;
+	var turnSpd = 30;
+	var playerModel = new Image();
+	 playerModel.src = "tempShip.png";
+	var canvasCreate = {
+	  canvas: document.createElement("canvas"),
+	  start: function() {
+		this.canvas.width = 480;
+		this.canvas.height = 640;
+		this.context = this.canvas.getContext("2d");
+		document.body.insertBefore(this.canvas, document.body.childNodes[0]);
+	  	this.interval = setInterval(interval, 20);
+	  },
+	  clear: function(){
+		this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+	  }
+	}
+	
+	function gameStart(){
+		canvasCreate.start();
+		temp = new player(240, 320);
+	}
+
+	function player(x, y){
+		this.x = x;
+		this.y = y;
+		ctx = canvasCreate.context;
+		this.update = function() {
+		ctx.drawImage(playerModel, 0, 0, 32, 32, this.x, this.y, 32, 32);
+		}
+	}
+
+	function interval(){
+		canvasCreate.clear();
+		temp.update();
+	}
+
+	function keyDown(/** @type {keyboardEvent}) )
+	*/
+  </script>
+  <button onclick="switchControls()" style="margin:auto">switch controls</button>
+</body>
+</html>
